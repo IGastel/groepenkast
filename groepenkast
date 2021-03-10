@@ -1,0 +1,554 @@
+ 
+/**
+ * Copyright (C) 2018 by Tom Kocher
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+// Enable debug prints to serial monitor
+#define MY_DEBUG
+
+// Define this for verbose debug prints related to the gateway transport. 
+#define MY_DEBUG_VERBOSE_GATEWAY
+
+/**
+ * Configure Ethernet transport
+ */
+// Enable gateway ethernet module type
+#define MY_GATEWAY_W5100
+//#define W5500_ETHERNET_SHIELD   
+
+// Enable UDP communication
+//#define MY_USE_UDP  // If using UDP you need to set MY_CONTROLLER_IP_ADDRESS or MY_CONTROLLER_URL_ADDRESS below
+
+// The MAC address can be anything you want but should be unique on your network.
+// Newer boards have a MAC address printed on the underside of the PCB, which you can (optionally) use.
+#define MY_MAC_ADDRESS 0xCA, 0xFE, 0xAF, 0xFE, 0x00, 0x02
+
+// Static ip address of gateway (if this is not defined, DHCP will be used).
+#define MY_IP_ADDRESS 192,168,2,3
+// Renewal period if using DHCP
+//#define MY_IP_RENEWAL_INTERVAL 60000
+
+// If using static ip you can define Gateway and Subnet address as well
+#define MY_IP_GATEWAY_ADDRESS 192,168,2,254
+#define MY_IP_SUBNET_ADDRESS 255,255,255,0
+
+// If this is defined, gateway will act as a client trying to contact controller on MY_PORT using this IP address.
+//#define MY_CONTROLLER_IP_ADDRESS 192,168,2,162
+
+// The Ethernet TCP/UDP port to open on controller or gateway.
+#define MY_PORT 5003
+
+/**
+ * Gateway code
+ */
+#if defined(MY_USE_UDP)
+#include <EthernetUdp.h>
+#endif
+#include <Ethernet.h> // use with Wiznet W5100 Ethernet modules
+//#include <Ethernet2.h> // use with Wiznet W5500 Ethernet modules
+#include <MySensors.h>
+#include <Bounce2.h>
+#include <AltSoftSerial.h>
+#include <SPI.h>
+
+//SoftwareSerial portOne(48, 46);
+AltSoftSerial altSerial;
+int msg[1];
+const uint64_t pipe = 0xE8E8F0F0E1LL;
+
+#define CHILD_ID_groep1 1
+#define CHILD_ID_groep2 2
+#define CHILD_ID_groep3 3
+#define CHILD_ID_groep4 4
+#define CHILD_ID_groep5 5
+#define CHILD_ID_groep6 6
+#define CHILD_ID_groep7 7
+#define CHILD_ID_groep8 8
+#define CHILD_ID_groep9 9
+#define CHILD_ID_groep10 10
+#define CHILD_ID_groep11 11
+#define CHILD_ID_groep12 12
+#define CHILD_ID_groep13 13
+#define CHILD_ID_groep14 14
+#define CHILD_ID_bliksem 15
+
+#define groep1_PIN 22 // Arduino Digital I/O pin for button/reed switch
+#define groep2_PIN 23
+#define groep3_PIN 24
+#define groep4_PIN 25
+#define groep5_PIN 26
+#define groep6_PIN 27
+#define groep7_PIN 28
+#define groep8_PIN 29
+#define groep9_PIN 30
+#define groep10_PIN 31
+#define groep11_PIN 32
+#define groep12_PIN 33
+#define groep13_PIN 34
+#define groep14_PIN 35
+#define bliksem_PIN 36
+#define mega_ss_pin 53
+
+char input; // incoming serial data (byte)
+bool readnextLine = false;
+#define BUFSIZE 75
+#define CHILD_ID_WATT 16
+#define CHILD_ID_KWH_LOW 17
+#define CHILD_ID_KWH_HIGH 18
+#define CHILD_ID_GAS 19
+#define CHILD_ID_CURRENT 20
+
+char buffer[BUFSIZE]; //Buffer for serial data to find \n .
+int bufpos = 0;
+long mEVLT = 0; //Meter reading Electrics - consumption low tariff
+long mEVHT = 0; //Meter reading Electrics - consumption high tariff
+long mEAV = 0;  //Meter reading Electrics - Actual consumption
+long mEAT = 0;  //Meter reading Electrics - Actual generated electricity (Solar panels)
+long mG = 0;   //Meter reading Gas
+int tarief = 3; //Meter actual rate
+MyMessage msgWatt(CHILD_ID_WATT, V_WATT);
+MyMessage msgKwhLow(CHILD_ID_KWH_LOW, V_KWH);
+MyMessage msgKwhHigh(CHILD_ID_KWH_HIGH, V_KWH);
+MyMessage msgGas(CHILD_ID_GAS, V_VAR1);
+MyMessage msgCurrent(CHILD_ID_CURRENT, V_VAR2);
+
+Bounce debouncergroep1 = Bounce();
+Bounce debouncergroep2 = Bounce();
+Bounce debouncergroep3 = Bounce();
+Bounce debouncergroep4 = Bounce();
+Bounce debouncergroep5 = Bounce();
+Bounce debouncergroep6 = Bounce();
+Bounce debouncergroep7 = Bounce();
+Bounce debouncergroep8 = Bounce();
+Bounce debouncergroep9 = Bounce();
+Bounce debouncergroep10 = Bounce();
+Bounce debouncergroep11 = Bounce();
+Bounce debouncergroep12 = Bounce();
+Bounce debouncergroep13 = Bounce();
+Bounce debouncergroep14 = Bounce();
+Bounce debouncerbliksem = Bounce();
+
+int oldValue_groep1 = -1;
+int oldValue_groep2 = -1;
+int oldValue_groep3 = -1;
+int oldValue_groep4 = -1;
+int oldValue_groep5 = -1;
+int oldValue_groep6 = -1;
+int oldValue_groep7 = -1;
+int oldValue_groep8 = -1;
+int oldValue_groep9 = -1;
+int oldValue_groep10 = -1;
+int oldValue_groep11 = -1;
+int oldValue_groep12 = -1;
+int oldValue_groep13 = -1;
+int oldValue_groep14 = -1;
+int oldValue_bliksem = -1;
+
+MyMessage msggroep1(CHILD_ID_groep1, V_TRIPPED);
+MyMessage msggroep2(CHILD_ID_groep2, V_TRIPPED);
+MyMessage msggroep3(CHILD_ID_groep3, V_TRIPPED);
+MyMessage msggroep4(CHILD_ID_groep4, V_TRIPPED);
+MyMessage msggroep5(CHILD_ID_groep5, V_TRIPPED);
+MyMessage msggroep6(CHILD_ID_groep6, V_TRIPPED);
+MyMessage msggroep7(CHILD_ID_groep7, V_TRIPPED);
+MyMessage msggroep8(CHILD_ID_groep8, V_TRIPPED);
+MyMessage msggroep9(CHILD_ID_groep9, V_TRIPPED);
+MyMessage msggroep10(CHILD_ID_groep10, V_TRIPPED);
+MyMessage msggroep11(CHILD_ID_groep11, V_TRIPPED);
+MyMessage msggroep12(CHILD_ID_groep12, V_TRIPPED);
+MyMessage msggroep13(CHILD_ID_groep13, V_TRIPPED);
+MyMessage msggroep14(CHILD_ID_groep14, V_TRIPPED);
+MyMessage msgbliksem(CHILD_ID_bliksem, V_TRIPPED);
+
+void before(){
+     //
+}
+
+void setup() {
+    // dit board werkt standaard op spi dus zetten we eerst de sd card uit hierna de w5500 aan. pin 4 en 10 en 11 voor initialisatie
+  pinMode(mega_ss_pin, OUTPUT);  
+  Ethernet.init(10);  // Most Arduino shields
+  // Setup the button1
+   pinMode(groep1_PIN, INPUT);
+   debouncergroep1.attach(groep1_PIN);
+   debouncergroep1.interval(5);
+   digitalWrite(groep1_PIN, HIGH);
+   // Setup the button2
+   pinMode(groep2_PIN, INPUT);
+   debouncergroep2.attach(groep2_PIN);
+   debouncergroep2.interval(5);
+   digitalWrite(groep2_PIN, HIGH);
+  // Setup the button3
+   pinMode(groep3_PIN, INPUT);
+   debouncergroep3.attach(groep3_PIN);
+   debouncergroep3.interval(5);
+   digitalWrite(groep3_PIN, HIGH);
+   // Setup the button4
+   pinMode(groep4_PIN, INPUT);
+   debouncergroep4.attach(groep4_PIN);
+   debouncergroep4.interval(5);
+   digitalWrite(groep4_PIN, HIGH);
+     // Setup the button5
+   pinMode(groep5_PIN, INPUT);
+   debouncergroep5.attach(groep5_PIN);
+   debouncergroep5.interval(5);
+   digitalWrite(groep5_PIN, HIGH);
+   // Setup the button6
+   pinMode(groep6_PIN, INPUT);
+   debouncergroep6.attach(groep6_PIN);
+   debouncergroep6.interval(5);
+   digitalWrite(groep6_PIN, HIGH);
+     // Setup the button7
+   pinMode(groep7_PIN, INPUT);
+   debouncergroep7.attach(groep7_PIN);
+   debouncergroep7.interval(5);
+   digitalWrite(groep7_PIN, HIGH);
+   // Setup the button8
+   pinMode(groep8_PIN, INPUT);
+   debouncergroep8.attach(groep8_PIN);
+   debouncergroep8.interval(5);
+   digitalWrite(groep8_PIN, HIGH);
+     // Setup the button9
+   pinMode(groep9_PIN, INPUT);
+   debouncergroep9.attach(groep9_PIN);
+   debouncergroep9.interval(5);
+   digitalWrite(groep9_PIN, HIGH);
+   // Setup the button10
+   pinMode(groep10_PIN, INPUT);
+   debouncergroep10.attach(groep10_PIN);
+   debouncergroep10.interval(5);
+   digitalWrite(groep10_PIN, HIGH);
+     // Setup the button11
+   pinMode(groep11_PIN, INPUT);
+   debouncergroep11.attach(groep11_PIN);
+   debouncergroep11.interval(5);
+   digitalWrite(groep11_PIN, HIGH);
+   // Setup the button12
+   pinMode(groep12_PIN, INPUT);
+   debouncergroep12.attach(groep12_PIN);
+   debouncergroep12.interval(5);
+   digitalWrite(groep12_PIN, HIGH);
+     // Setup the button13
+   pinMode(groep13_PIN, INPUT);
+   debouncergroep13.attach(groep13_PIN);
+   debouncergroep13.interval(5);
+   digitalWrite(groep13_PIN, HIGH);
+   // Setup the button14
+   pinMode(groep14_PIN, INPUT);
+   debouncergroep14.attach(groep14_PIN);
+   debouncergroep14.interval(5);
+   digitalWrite(groep14_PIN, HIGH);  
+   // Setup the button15
+   pinMode(bliksem_PIN, INPUT);
+   debouncerbliksem.attach(bliksem_PIN);
+   debouncerbliksem.interval(5);
+   digitalWrite(bliksem_PIN, HIGH);
+   Serial.println("knoppen geinitialiseerd");
+   altSerial.begin(115200);
+   delay(1000);
+}
+
+void presentation() {
+  sendSketchInfo("groepenkast", "0.3");
+  present(CHILD_ID_groep1, S_DOOR);
+  present(CHILD_ID_groep2, S_DOOR);
+  present(CHILD_ID_groep3, S_DOOR);
+  present(CHILD_ID_groep4, S_DOOR);
+  present(CHILD_ID_groep5, S_DOOR);
+  present(CHILD_ID_groep6, S_DOOR);
+  present(CHILD_ID_groep7, S_DOOR);
+  present(CHILD_ID_groep8, S_DOOR);
+  present(CHILD_ID_groep9, S_DOOR);
+  present(CHILD_ID_groep10, S_DOOR);
+  present(CHILD_ID_groep11, S_DOOR);
+  present(CHILD_ID_groep12, S_DOOR);
+  present(CHILD_ID_groep13, S_DOOR);
+  present(CHILD_ID_groep14, S_DOOR);  
+  present(CHILD_ID_bliksem, S_DOOR);
+  Serial.println("knoppen gepresenteerd");
+  present(CHILD_ID_WATT, S_POWER);
+  present(CHILD_ID_KWH_LOW, S_POWER);
+  present(CHILD_ID_KWH_HIGH, S_POWER);
+  present(CHILD_ID_GAS, S_CUSTOM);
+  present(CHILD_ID_CURRENT, S_CUSTOM);
+  Serial.println("stroom/gas gepresenteerd");
+}
+
+void loop() {
+  groepen();
+  P1_meting();
+}
+
+void groepen()
+{
+ debouncergroep1.update();
+  // Get the update value
+  int valuegroep1 = debouncergroep1.read();
+
+  if (valuegroep1 != oldValue_groep1) {
+  // Send in the new value
+  send(msggroep1.set(valuegroep1 == HIGH ? 1 : 0));
+  Serial.println("groep 1 geactiveerd");
+  oldValue_groep1 = valuegroep1;
+  }
+
+  debouncergroep2.update();
+  // Get the update value
+  int valuegroep2 = debouncergroep2.read();
+
+  if (valuegroep2 != oldValue_groep2) {
+  // Send in the new value
+  send(msggroep2.set(valuegroep2 == HIGH ? 1 : 0));
+  Serial.println("groep 2 geactiveerd");
+  oldValue_groep2 = valuegroep2;
+  }
+  debouncergroep3.update();
+  // Get the update value
+  int valuegroep3 = debouncergroep3.read();
+
+  if (valuegroep3 != oldValue_groep3) {
+  // Send in the new value
+  send(msggroep3.set(valuegroep3 == HIGH ? 1 : 0));
+  Serial.println("groep 3 geactiveerd");
+  oldValue_groep3 = valuegroep3;
+  }
+  debouncergroep4.update();
+  // Get the update value
+  int valuegroep4 = debouncergroep4.read();
+
+  if (valuegroep4 != oldValue_groep4) {
+  // Send in the new value
+  send(msggroep4.set(valuegroep4 == HIGH ? 1 : 0));
+  Serial.println("groep 4 geactiveerd");
+  oldValue_groep4 = valuegroep4;
+  }
+  debouncergroep5.update();
+  // Get the update value
+  int valuegroep5 = debouncergroep5.read();
+
+  if (valuegroep5 != oldValue_groep5) {
+  // Send in the new value
+  send(msggroep5.set(valuegroep5 == HIGH ? 1 : 0));
+  Serial.println("groep 5 geactiveerd");
+  oldValue_groep5 = valuegroep5;
+  }
+  debouncergroep6.update();
+  // Get the update value
+  int valuegroep6 = debouncergroep6.read();
+
+  if (valuegroep6 != oldValue_groep6) {
+  // Send in the new value
+  send(msggroep6.set(valuegroep6 == HIGH ? 1 : 0));
+  Serial.println("groep 6 geactiveerd");
+  oldValue_groep6 = valuegroep6;
+  }
+  debouncergroep7.update();
+  // Get the update value
+  int valuegroep7 = debouncergroep7.read();
+
+  if (valuegroep7 != oldValue_groep7) {
+  // Send in the new value
+  send(msggroep7.set(valuegroep7 == HIGH ? 1 : 0));
+  Serial.println("groep 7 geactiveerd");
+  oldValue_groep7 = valuegroep7;
+  }
+  debouncergroep8.update();
+  // Get the update value
+  int valuegroep8 = debouncergroep8.read();
+
+  if (valuegroep8 != oldValue_groep8) {
+  // Send in the new value
+  send(msggroep8.set(valuegroep8 == HIGH ? 1 : 0));
+  Serial.println("groep 8 geactiveerd");
+  oldValue_groep8 = valuegroep8;
+  }
+  debouncergroep9.update();
+  // Get the update value
+  int valuegroep9 = debouncergroep9.read();
+
+  if (valuegroep9 != oldValue_groep9) {
+  // Send in the new value
+  send(msggroep9.set(valuegroep9 == HIGH ? 1 : 0));
+  Serial.println("groep 9 geactiveerd");
+  oldValue_groep9 = valuegroep9;
+  }
+  debouncergroep10.update();
+  // Get the update value
+  int valuegroep10 = debouncergroep10.read();
+
+  if (valuegroep10 != oldValue_groep10) {
+  // Send in the new value
+  send(msggroep10.set(valuegroep10 == HIGH ? 1 : 0));
+  Serial.println("groep 10 geactiveerd");
+  oldValue_groep10 = valuegroep10;
+  }
+  debouncergroep11.update();
+  // Get the update value
+  int valuegroep11 = debouncergroep11.read();
+
+  if (valuegroep11 != oldValue_groep11) {
+  // Send in the new value
+  send(msggroep11.set(valuegroep11 == HIGH ? 1 : 0));
+  Serial.println("groep 11 geactiveerd");
+  oldValue_groep11 = valuegroep11;
+  }
+  debouncergroep12.update();
+  // Get the update value
+  int valuegroep12 = debouncergroep12.read();
+
+  if (valuegroep12 != oldValue_groep12) {
+  // Send in the new value
+  send(msggroep12.set(valuegroep12 == HIGH ? 1 : 0));
+  Serial.println("groep 12 geactiveerd");
+  oldValue_groep12 = valuegroep12;
+  }
+  debouncergroep13.update();
+  // Get the update value
+  int valuegroep13 = debouncergroep13.read();
+
+  if (valuegroep13 != oldValue_groep13) {
+  // Send in the new value
+  send(msggroep13.set(valuegroep13 == HIGH ? 1 : 0));
+  Serial.println("groep 13 geactiveerd");
+  oldValue_groep13 = valuegroep13;
+  }
+  debouncergroep14.update();
+  // Get the update value
+  int valuegroep14 = debouncergroep14.read();
+
+  if (valuegroep14 != oldValue_groep14) {
+  // Send in the new value
+  send(msggroep14.set(valuegroep14 == HIGH ? 1 : 0));
+  Serial.println("groep 14 geactiveerd");
+  oldValue_groep14 = valuegroep14;
+  }
+  debouncerbliksem.update();
+  // Get the update value
+  int valuebliksem = debouncerbliksem.read();
+
+  if (valuebliksem != oldValue_bliksem) {
+  // Send in the new value
+  send(msgbliksem.set(valuebliksem == HIGH ? 1 : 0));
+  Serial.println("bliksemafleider geactiveerd");
+  oldValue_bliksem = valuebliksem;
+  }
+}
+
+void P1_meting(){
+  long tl = 0;
+  long tld =0;
+  if (altSerial.available()) {
+      char input = altSerial.read();
+      buffer[bufpos] = input&127;
+      bufpos++;
+      if (input == '\n') { // We received a new line (data up to \n)
+        // 1-0:1.8.2 = Electricity consumption high tariff (DSMR v4.0)
+        if (sscanf(buffer,"1-0:1.8.2(%ld%.%ld%*s" , &tl, &tld) >0 ) {
+          tl *= 1000;
+          tl += tld;
+          mEVHT = tl;    
+          //mEVHT = tl * 1000 + tld;
+          if (mEVHT > 0) {
+  
+            //mEVHT = 0;
+          }
+        }
+  
+          if (sscanf(buffer,"0-0:96.14.0(%ld.%ld*s" , &tl) >0  )   //)
+          {
+            tarief = tl;
+          }
+  
+  
+        if (sscanf(buffer,"1-0:1.8.1(%ld.%ld" ,&tl, &tld)==2){
+          tl *= 1000;
+          tl += tld;
+          mEVLT = tl;
+  
+          if (mEVLT > 0) {
+  
+  
+          }
+        }
+  
+        // 1-0:1.7.0 = Electricity consumption actual usage (DSMR v4.0)
+        if (sscanf(buffer,"1-0:1.7.0(%ld.%ld" ,&tl , &tld) == 2)
+        { 
+          mEAV = (tl*1000)+tld;
+          if (mEAV > 0) {
+  
+          }
+        }
+  
+        // 0-1:24.2.1 = Gas (DSMR v4.0) on Kaifa MA105 meter
+        if (strncmp(buffer, "0-1:24.2.1", strlen("0-1:24.2.1")) == 0) {
+          if (sscanf(strrchr(buffer, '(') + 1, "%d.%d", &tl, &tld) == 2) {
+            mG = (tl*1000)+tld; 
+  
+          }
+        }
+  
+        // Empty buffer again (whole array)
+        for (int i=0; i<75; i++)
+        { 
+          buffer[i] = 0;
+        }
+        bufpos = 0;
+  
+      }
+       
+      if (input == '!') {   //uitroepteken geeft einde van telegram aan, dus we gaan data versturen
+        #ifdef DEBUG
+          printData();
+        #endif
+        send(msgWatt.set(mEAV));
+        send(msgKwhLow.set(mEVLT));
+        send(msgKwhHigh.set(mEVHT));
+        send(msgGas.set(mG));
+        send(msgCurrent.set(tarief));
+        mEVHT=0;
+        mEVLT = 0;
+        mEAV = 0;
+        mG = 0;
+        tarief=3;
+        //client.stop();
+      } //Einde vraagteken detectie   
+  
+    } //Einde 'if AltSerial.available'
+}
+
+
+void printData(){
+  Serial.println("********* BEGIN LOOP *********");  
+  Serial.print("Elektra - meterstand verbruik HOOG tarief (Wh): ");
+  Serial.println(mEVHT);  
+  Serial.print("Elektra - meterstand verbruik LAAG tarief (Wh): ");
+  Serial.println(mEVLT);  
+  Serial.print("Elektra - actueel verbruik (W): ");
+  Serial.println(mEAV);
+  Serial.print("Gas - meterstand (liters): ");
+  Serial.println(mG);
+
+  Serial.print("Huidige tarief: ");
+  if (tarief==1){
+    Serial.println ("dal");
+  }
+  else {
+    Serial.println("hoog");
+  }
+//  Serial.println(tarief);
+  Serial.println("");
+}  
